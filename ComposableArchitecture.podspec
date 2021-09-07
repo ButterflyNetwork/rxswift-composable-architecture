@@ -12,7 +12,7 @@ Point-Free’s The Composable Architecture uses Apple's Combine framework as the
   s.source           = { :git => 'https://github.com/dannyhertz/rxswift-composable-architecture.git', :tag => s.version.to_s }
   s.license          = { :type => 'MIT' }
 
-  s.ios.deployment_target = '12.0'
+  s.ios.deployment_target = '13.0'
   s.swift_version = '5.2'
 
   s.source_files = 'Sources/ComposableArchitecture/**/*.swift'
