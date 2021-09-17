@@ -187,9 +187,12 @@ public final class Store<State, Action> {
     state toLocalState: @escaping (State) -> LocalState,
     action fromLocalAction: @escaping (LocalAction) -> Action
   ) -> Store<LocalState, LocalAction> {
+    var isSending = false
     let localStore = Store<LocalState, LocalAction>(
       initialState: toLocalState(self.state),
       reducer: { localState, localAction in
+        isSending = true
+        defer { isSending = false }
         self.send(fromLocalAction(localAction))
         localState = toLocalState(self.state)
         return .none
@@ -198,7 +201,9 @@ public final class Store<State, Action> {
     )
 
     localStore.parentDisposable = self.observable
+      .skip(1)
       .subscribe(onNext: { [weak localStore] newValue in
+        guard !isSending else { return }
         localStore?.state = toLocalState(newValue)
       })
 
@@ -366,16 +371,23 @@ public final class Store<State, Action> {
 @dynamicMemberLookup
 public struct StorePublisher<State>: ObservableType {
   public typealias Element = State
+
+  private let isDuplicate: (State, State) -> Bool
   public let upstream: Observable<State>
   let scheduler: SchedulerType?
 
   public func subscribe<Observer>(_ observer: Observer) -> Disposable
   where Observer: ObserverType, Self.Element == Observer.Element {
-    upstream.observeOn(optional: scheduler).subscribe(observer)
+    upstream.distinctUntilChanged(isDuplicate).observeOn(optional: scheduler).subscribe(observer)
   }
 
-  init(_ upstream: Observable<State>, scheduler: SchedulerType? = nil) {
+  init(
+    _ upstream: Observable<State>,
+    removeDuplicates isDuplicate: @escaping (State, State) -> Bool,
+    scheduler: SchedulerType? = nil
+  ) {
     self.upstream = upstream
+    self.isDuplicate = isDuplicate
     self.scheduler = scheduler
   }
 
@@ -386,6 +398,7 @@ public struct StorePublisher<State>: ObservableType {
   where LocalState: Equatable {
     .init(
       self.upstream.map { $0[keyPath: keyPath] }.distinctUntilChanged(),
+      removeDuplicates: ==,
       scheduler: scheduler
     )
   }

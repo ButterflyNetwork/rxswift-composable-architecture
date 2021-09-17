@@ -64,11 +64,13 @@ public final class ViewStore<State, Action> {
     removeDuplicates isDuplicate: @escaping (State, State) -> Bool,
     viewStateScheduler: SchedulerType? = nil
   ) {
-    let publisher = store.observable.distinctUntilChanged(isDuplicate)
-    self.publisher = StorePublisher(publisher, scheduler: viewStateScheduler)
+    self.publisher = StorePublisher(store.observable, removeDuplicates: isDuplicate, scheduler: viewStateScheduler)
     self.stateRelay = BehaviorRelay(value: store.state)
     self._send = store.send
-    self.viewDisposable = publisher.subscribe(onNext: { [weak self] in self?.state = $0 })
+    self.viewDisposable = publisher
+      .skip(1)
+      .distinctUntilChanged(isDuplicate)
+      .subscribe(onNext: { [weak self] in self?.state = $0 })
   }
 
   /// The current state.
