@@ -52,7 +52,14 @@ extension Effect {
       defer { cancellablesLock.unlock() }
 
       let subject = PublishSubject<Output>()
-      let disposable = self.subscribe(subject)
+      var values: [Output] = []
+      var isCaching = true
+      let disposable = self
+        .do(onNext: { val in
+          guard isCaching else { return }
+          values.append(val)
+        })
+        .subscribe(subject)
 
       var cancellationDisposable: AnyDisposable!
       cancellationDisposable = AnyDisposable(
@@ -71,10 +78,12 @@ extension Effect {
         cancellationDisposable
       )
 
-      return subject
+      return Observable.from(values)
+        .concat(subject)
         .do(
           onError: { _ in cancellationDisposable.dispose() },
           onCompleted: cancellationDisposable.dispose,
+          onSubscribed: { isCaching = false },
           onDispose: cancellationDisposable.dispose
         )
     }
