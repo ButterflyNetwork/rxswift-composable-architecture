@@ -182,12 +182,21 @@ public final class Store<State, Action> {
   /// - Parameters:
   ///   - toLocalState: A function that transforms `State` into `LocalState`.
   ///   - fromLocalAction: A function that transforms `LocalAction` into `Action`.
+  ///   - overrideSendingQueue: A value describing on which queue the returned scoped Store runs.
   /// - Returns: A new store with its domain (state and action) transformed.
   public func scope<LocalState, LocalAction>(
     state toLocalState: @escaping (State) -> LocalState,
-    action fromLocalAction: @escaping (LocalAction) -> Action
+    action fromLocalAction: @escaping (LocalAction) -> Action,
+    overrideSendingQueue: ScopedSendingQueueType = .inherit
   ) -> Store<LocalState, LocalAction> {
     var isSending = false
+    let queue: DispatchQueue? = {
+        switch overrideSendingQueue {
+        case .nil: return nil
+        case .inherit: return sendingQueue
+        case .override(let queue): return queue
+        }
+    }()
     let localStore = Store<LocalState, LocalAction>(
       initialState: toLocalState(self.state),
       reducer: { localState, localAction in
@@ -197,7 +206,7 @@ public final class Store<State, Action> {
         localState = toLocalState(self.state)
         return .none
       },
-      sendingQueue: sendingQueue
+      sendingQueue: queue
     )
 
     localStore.parentDisposable = self.observable
@@ -208,6 +217,16 @@ public final class Store<State, Action> {
       })
 
     return localStore
+  }
+
+  /// Determines how a Store produced by `scope(…)` set their `sendingQueue`.
+  /// - case `nil`: Actions are sent to the reducer on the queue on which they are received
+  /// - case `inherit`: Uses the same queue as the receiver.
+  /// - case `override`: Uses the queue explicitly provided.
+  public enum ScopedSendingQueueType {
+      case `nil`
+      case inherit
+      case override(DispatchQueue)
   }
 
   /// Scopes the store to one that exposes local state.
