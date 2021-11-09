@@ -5,7 +5,8 @@ PLATFORM_TVOS = tvOS Simulator,name=Apple TV 4K (at 1080p)
 default: test
 
 test:
-	instruments -s devices
+	xcrun xctrace list devices
+	swift package resolve
 	xcodebuild test \
 		-scheme ComposableArchitecture \
 		-destination platform="$(PLATFORM_IOS)"

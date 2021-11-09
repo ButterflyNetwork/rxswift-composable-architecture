@@ -1,13 +1,13 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.3
 
 import PackageDescription
 
 let package = Package(
   name: "rxswift-composable-architecture",
   platforms: [
-    .iOS(.v13),
+    .iOS(.v14),
     .macOS(.v10_15),
-    .tvOS(.v13),
+    .tvOS(.v14),
     .watchOS(.v6),
   ],
   products: [
@@ -22,19 +22,22 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "0.1.1"),
-    .package(url: "https://github.com/ReactiveX/RxSwift.git", from: "5.0.0"),
+    .package(url: "https://github.com/ReactiveX/RxSwift.git", from: "6.2.0"),
   ],
   targets: [
     .target(
       name: "ComposableArchitecture",
       dependencies: [
-        "CasePaths", "RxSwift", "RxRelay",
+        .product(name: "CasePaths", package: "swift-case-paths"),
+        "RxSwift",
+        .product(name: "RxRelay", package: "RxSwift"),
       ]
     ),
     .testTarget(
       name: "ComposableArchitectureTests",
       dependencies: [
-        "ComposableArchitecture", "RxTest",
+        "ComposableArchitecture",
+        .product(name: "RxTest", package: "RxSwift"),
       ]
     ),
     .target(
