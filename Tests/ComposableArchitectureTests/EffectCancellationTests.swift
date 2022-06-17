@@ -11,6 +11,7 @@ final class EffectCancellationTests: XCTestCase {
   override func tearDown() {
     super.tearDown()
     disposeBag = DisposeBag()
+    cancellationCancellables.removeAll()
   }
 
   func testCancellation() {

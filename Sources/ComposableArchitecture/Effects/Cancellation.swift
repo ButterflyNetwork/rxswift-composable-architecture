@@ -51,45 +51,44 @@ extension Effect {
       cancellablesLock.lock()
       defer { cancellablesLock.unlock() }
 
-      let subject = PublishSubject<Output>()
-      var values: [Output] = []
-      var isCaching = true
-      let disposable = self
-        .do(onNext: { val in
-          guard isCaching else { return }
-          values.append(val)
-        })
-        .subscribe(subject)
+      let id = CancelToken(id: id)
+      if cancelInFlight {
+        cancellationCancellables[id]?.forEach { $0.dispose() }
+      }
+
+      let cancellationSubject = PublishSubject<Void>()
 
       var cancellationDisposable: AnyDisposable!
       cancellationDisposable = AnyDisposable(
         Disposables.create {
           cancellablesLock.sync {
-            subject.onCompleted()
-            disposable.dispose()
+            cancellationSubject.onNext(())
+            cancellationSubject.onCompleted()
             cancellationCancellables[id]?.remove(cancellationDisposable)
             if cancellationCancellables[id]?.isEmpty == .some(true) {
               cancellationCancellables[id] = nil
             }
           }
-        })
-
-      cancellationCancellables[id, default: []].insert(
-        cancellationDisposable
+        }
       )
 
-      return Observable.from(values)
-        .concat(subject)
+      return self.take(until: cancellationSubject)
         .do(
-          onError: { _ in cancellationDisposable.dispose() },
-          onCompleted: cancellationDisposable.dispose,
-          onSubscribed: { isCaching = false },
+          afterError: { _ in cancellationDisposable.dispose() },
+          afterCompleted: cancellationDisposable.dispose,
+          onSubscribed: {
+            _ = cancellablesLock.sync {
+              cancellationCancellables[id, default: []].insert(
+                cancellationDisposable
+              )
+            }
+          },
           onDispose: cancellationDisposable.dispose
         )
     }
     .eraseToEffect()
 
-    return cancelInFlight ? .concatenate(.cancel(id: id), effect) : effect
+    return effect
   }
 
   /// An effect that will cancel any currently in-flight effect with the given identifier.
@@ -100,11 +99,21 @@ extension Effect {
   public static func cancel(id: AnyHashable) -> Effect {
     return .fireAndForget {
       cancellablesLock.sync {
-        cancellationCancellables[id]?.forEach { $0.dispose() }
+        cancellationCancellables[.init(id: id)]?.forEach { $0.dispose() }
       }
     }
   }
 }
 
-var cancellationCancellables: [AnyHashable: Set<AnyDisposable>] = [:]
+struct CancelToken: Hashable {
+  let id: AnyHashable
+  let discriminator: ObjectIdentifier
+
+  init(id: AnyHashable) {
+    self.id = id
+    self.discriminator = ObjectIdentifier(type(of: id.base))
+  }
+}
+
+var cancellationCancellables: [CancelToken: Set<AnyDisposable>] = [:]
 let cancellablesLock = NSRecursiveLock()
